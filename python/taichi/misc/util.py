@@ -3,6 +3,8 @@ import os
 import datetime
 import platform
 import random
+import taichi
+
 
 def get_os_name():
     name = platform.platform()
@@ -19,12 +21,15 @@ def get_uuid():
     print 'Warning: get_uuid is deprecated. Please use get_unique_task_id instead.'
     return get_unique_task_id()
 
+
 def get_unique_task_id():
     return datetime.datetime.now().strftime('task-%Y-%m-%d-%H-%M-%S-r') + ('%05d' % random.randint(0, 10000))
+
 
 import copy
 import numpy as np
 import ctypes
+
 
 def config_from_dict(args):
     from taichi.core import tc_core
@@ -36,6 +41,7 @@ def config_from_dict(args):
         d[k] = str(d[k])
     return tc_core.config_from_dict(d)
 
+
 def make_polygon(points, scale):
     polygon = tc.Vector2List()
     for p in points:
@@ -44,6 +50,7 @@ def make_polygon(points, scale):
         else:
             polygon.append(scale * p)
     return polygon
+
 
 def Vectori(*args):
     from taichi.core import tc_core
@@ -60,11 +67,14 @@ def Vectori(*args):
     else:
         assert False, type(args[0])
 
+
 def Vector(*args):
     from taichi.core import tc_core
     if isinstance(args[0], tc_core.Vector2):
         return args[0]
     if isinstance(args[0], tc_core.Vector3):
+        return args[0]
+    if isinstance(args[0], tc_core.Vector4):
         return args[0]
     if isinstance(args[0], tuple):
         args = tuple(*args)
@@ -72,6 +82,8 @@ def Vector(*args):
         return tc_core.Vector2(float(args[0]), float(args[1]))
     elif len(args) == 3:
         return tc_core.Vector3(float(args[0]), float(args[1]), float(args[2]))
+    elif len(args) == 4:
+        return tc_core.Vector4(float(args[0]), float(args[1]), float(args[2]), float(args[3]))
     else:
         assert False, type(args[0])
 
@@ -82,6 +94,7 @@ def default_const_or_evaluate(f, default, u, v):
     if type(f) in [float, int, tuple]:
         return f
     return f(u, v)
+
 
 def const_or_evaluate(f, u, v):
     if type(f) in [float, int, tuple, tc.Vector2, tc.Vector3]:
@@ -104,6 +117,7 @@ def array2d_to_image(arr, width, height, color_255, transform='levelset'):
     image_data = pyglet.image.ImageData(width, height, 'RGBA', dat.tostring())
     return image_data
 
+
 def image_buffer_to_image(arr):
     raw_data = np.empty((arr.get_width() * arr.get_height() * 3,), dtype='float32')
     arr.to_ndarray(raw_data.ctypes.data_as(ctypes.c_void_p).value)
@@ -113,18 +127,43 @@ def image_buffer_to_image(arr):
     image_data = pyglet.image.ImageData(arr.get_width(), arr.get_height(), 'RGB', data_string)
     return image_data
 
-def image_buffer_to_ndarray(arr):
+
+def image_buffer_to_ndarray(arr, bgr=False):
     channels = arr.get_channels()
     raw_data = np.empty((arr.get_width() * arr.get_height() * channels,), dtype='float32')
     arr.to_ndarray(raw_data.ctypes.data_as(ctypes.c_void_p).value)
     dat = raw_data.astype('float32')
-    return dat.reshape((arr.get_height(), arr.get_width(), channels))[::-1,:,::-1]
+    ret = dat.reshape((arr.get_height(), arr.get_width(), channels))[::-1, :]
+    if bgr:
+        ret = ret[:, :, ::-1]
+    return ret
+
 
 def arange(x, y, d):
     while x < y:
         yield x
         x += d
 
+
 def P(**kwargs):
     return config_from_dict(kwargs)
 
+
+def imread(fn, bgr=False):
+    img = taichi.core.RGBImageFloat(0, 0, taichi.Vector(0.0, 0.0, 0.0))
+    img.read(fn)
+    return image_buffer_to_ndarray(img, bgr)[::-1]
+
+
+def ndarray_to_image_buffer(array):
+    flattened = array[::-1].flatten().copy()
+    input_ptr = flattened.ctypes.data_as(ctypes.c_void_p).value
+    if array.shape[2] == 3:
+        img = taichi.core.RGBImageFloat(0, 0, taichi.Vector(0, 0, 0))
+        img.from_ndarray(input_ptr, array.shape[1], array.shape[0])
+    elif array.shape[2] == 4:
+        img = taichi.core.RGBAImageFloat(0, 0, taichi.Vector(0, 0, 0, 0))
+        img.from_ndarray(input_ptr, array.shape[1], array.shape[0])
+    else:
+        assert False, 'array should have 3 or 4 channels'
+    return img

@@ -1,21 +1,31 @@
 from taichi.misc.util import *
-import time
+
+import atexit
 import os
+import time
+import numpy
+
+from concurrent.futures import ThreadPoolExecutor
+from subprocess import Popen
+from tempfile import mkstemp
+
 import taichi
+
 from taichi.core import tc_core
-from taichi.misc.util import get_uuid
+from taichi.misc.util import get_unique_task_id
 from taichi.visual.post_process import LDRDisplay
 from taichi.misc.settings import get_num_cores
-import cv2
 
 
 class Renderer(object):
-    def __init__(self, name=None, output_dir=get_uuid(), overwrite=True, frame=0,
+    def __init__(self, name=None, output_dir=get_unique_task_id(), overwrite=True, frame=0,
                  scene=None, preset=None, **kwargs):
         self.renderer_name = name
         self.output_dir = taichi.settings.get_output_path(output_dir + '/')
         self.post_processor = LDRDisplay()
         self.frame = frame
+        self.viewer_started = False
+        self.viewer_process = None
         try:
             os.mkdir(self.output_dir)
         except Exception as e:
@@ -54,18 +64,53 @@ class Renderer(object):
         return self.output_dir + fn
 
     def write(self, fn):
-        cv2.imwrite(self.get_full_fn(fn), self.get_output() * 255)
+        self.get_image_output().write(self.get_full_fn(fn))
 
+    # Returns numpy.ndarray
     def get_output(self):
         output = self.c.get_output()
         output = image_buffer_to_ndarray(output)
+
         if self.post_processor:
             output = self.post_processor.process(output)
+
         return output
 
+    # Returns ImageBuffer<Vector3> a.k.a. RGBImageFloat
+    def get_image_output(self):
+        return taichi.util.ndarray_to_image_buffer(self.get_output())
+
     def show(self):
-        cv2.imshow('Rendered', self.get_output())
-        cv2.waitKey(1)
+        # allow the user to opt out of the frame viewer by invoking the script
+        # with --no-viewer in the command line
+        if '--no-viewer' in sys.argv:
+            return
+
+        frame_path = self.get_full_fn('current-frame.png')
+
+        # atomic write so watchers don't get a partial image
+        _, temp_path = mkstemp()
+        self.get_image_output().write(temp_path)
+        os.rename(temp_path, frame_path)
+
+        if not self.viewer_started:
+            self.viewer_started = True
+
+            pool = ThreadPoolExecutor(max_workers=1)
+            pool.submit(self.start_viewer, frame_path)
+
+    def end_viewer_process(self):
+        if self.viewer_process.returncode is not None:
+            return
+
+        self.viewer_process.terminate()
+
+    def start_viewer(self, frame_path):
+        path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../gui/tk/viewer.py')
+
+        self.viewer_process = Popen(['python', path, frame_path])
+
+        atexit.register(self.end_viewer_process)
 
     def __getattr__(self, key):
         return self.c.__getattribute__(key)
