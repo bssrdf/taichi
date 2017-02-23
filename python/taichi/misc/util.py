@@ -43,7 +43,8 @@ def config_from_dict(args):
 
 
 def make_polygon(points, scale):
-    polygon = tc.Vector2List()
+    import taichi as tc
+    polygon = tc.core.Vector2List()
     for p in points:
         if type(p) == list or type(p) == tuple:
             polygon.append(scale * Vector(p[0], p[1]))
@@ -95,17 +96,19 @@ def default_const_or_evaluate(f, default, u, v):
         return f
     return f(u, v)
 
-
 def const_or_evaluate(f, u, v):
-    if type(f) in [float, int, tuple, tc.Vector2, tc.Vector3]:
+    import taichi as tc
+    if type(f) in [float, int, tuple, tc.core.Vector2, tc.core.Vector3]:
         return f
     return f(u, v)
 
 
 def array2d_to_image(arr, width, height, color_255, transform='levelset'):
+    import pyglet
     rasterized = arr.rasterize(width, height)
-    raw_data = np.empty((width * height,), dtype='float32')
+    raw_data = np.empty((width, height), dtype='float32')
     rasterized.to_ndarray(raw_data.ctypes.data_as(ctypes.c_void_p).value)
+    raw_data = raw_data.swapaxes(0, 1).copy().flatten()
     if transform == 'levelset':
         raw_data = (raw_data <= 0)
     else:
@@ -119,6 +122,7 @@ def array2d_to_image(arr, width, height, color_255, transform='levelset'):
 
 
 def image_buffer_to_image(arr):
+    import pyglet
     raw_data = np.empty((arr.get_width() * arr.get_height() * 3,), dtype='float32')
     arr.to_ndarray(raw_data.ctypes.data_as(ctypes.c_void_p).value)
     dat = (raw_data * 255.0).astype('uint8')
@@ -133,7 +137,7 @@ def image_buffer_to_ndarray(arr, bgr=False):
     raw_data = np.empty((arr.get_width() * arr.get_height() * channels,), dtype='float32')
     arr.to_ndarray(raw_data.ctypes.data_as(ctypes.c_void_p).value)
     dat = raw_data.astype('float32')
-    ret = dat.reshape((arr.get_height(), arr.get_width(), channels))[::-1, :]
+    ret = dat.reshape((arr.get_width(), arr.get_height(), channels))
     if bgr:
         ret = ret[:, :, ::-1]
     return ret
@@ -150,20 +154,33 @@ def P(**kwargs):
 
 
 def imread(fn, bgr=False):
-    img = taichi.core.RGBImageFloat(0, 0, taichi.Vector(0.0, 0.0, 0.0))
+    img = taichi.core.Array2DVector3(0, 0, taichi.Vector(0.0, 0.0, 0.0))
     img.read(fn)
     return image_buffer_to_ndarray(img, bgr)[::-1]
 
-
-def ndarray_to_image_buffer(array):
-    flattened = array[::-1].flatten().copy()
-    input_ptr = flattened.ctypes.data_as(ctypes.c_void_p).value
-    if array.shape[2] == 3:
-        img = taichi.core.RGBImageFloat(0, 0, taichi.Vector(0, 0, 0))
-        img.from_ndarray(input_ptr, array.shape[1], array.shape[0])
+def ndarray_to_array2d(array):
+    array = array.copy()
+    input_ptr = array.ctypes.data_as(ctypes.c_void_p).value
+    if len(array.shape) == 2 or array.shape[2] == 1:
+        arr = taichi.core.Array2DReal(0, 0)
+    elif array.shape[2] == 3:
+        arr = taichi.core.Array2DVector3(0, 0, taichi.Vector(0, 0, 0))
     elif array.shape[2] == 4:
-        img = taichi.core.RGBAImageFloat(0, 0, taichi.Vector(0, 0, 0, 0))
-        img.from_ndarray(input_ptr, array.shape[1], array.shape[0])
+        arr = taichi.core.Array2DVector4(0, 0, taichi.Vector(0, 0, 0, 0))
     else:
-        assert False, 'array should have 3 or 4 channels'
-    return img
+        assert False, 'ndarray has to be n*m, n*m*3, or n*m*4'
+    arr.from_ndarray(input_ptr, array.shape[0], array.shape[1])
+    return arr
+
+def array2d_to_ndarray(arr):
+    if isinstance(arr, taichi.core.Array2DVector3):
+        ndarray = np.empty((arr.get_width(), arr.get_height(), 3), dtype='float32')
+    elif isinstance(arr, taichi.core.Array2DVector4):
+        ndarray = np.empty((arr.get_width(), arr.get_height(), 4), dtype='float32')
+    elif isinstance(arr, taichi.core.Array2DReal):
+        ndarray = np.empty((arr.get_width(), arr.get_height()), dtype='float32')
+    else:
+        assert False, 'Array2d must have type real, Vector3, or Vector4'
+    output_ptr = ndarray.ctypes.data_as(ctypes.c_void_p).value
+    arr.to_ndarray(output_ptr)
+    return ndarray

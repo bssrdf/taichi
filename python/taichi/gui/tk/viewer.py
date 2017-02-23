@@ -2,6 +2,7 @@ import os
 import platform
 import sys
 import Tkinter as tk
+import taichi as tc
 
 from PIL import Image, ImageTk
 
@@ -9,15 +10,20 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 tk_root = None
+import numpy as np
 
 
-def get_tk_root():
+def get_top_level():
     global tk_root
-    tk_root = tk.Tk()
-    return tk_root
+    if tk_root is None:
+        tk_root = tk.Tk()
+        return tk_root
+    else:
+        return tk.Toplevel()
 
 
 def update_tk():
+    assert tk_root is not None
     tk_root.update_idletasks()
     tk_root.update()
 
@@ -66,19 +72,9 @@ class ImageWatchdog(object):
         observer.start()
 
         # bring the window to the front when launched
-        if platform.system() != 'Darwin':
-            self.root.lift()
-            self.root.attributes('-topmost', True)
-            self.root.after_idle(self.root.attributes, '-topmost', False)
-        else:
-            self.root.lift()
-            self.root.attributes('-topmost', True)
-            self.root.after_idle(self.root.attributes, '-topmost', False)
-            '''
-            from Cocoa import NSRunningApplication, NSApplicationActivateIgnoringOtherApps
-            app = NSRunningApplication.runningApplicationWithProcessIdentifier(os.getpid())
-            app.activateWithOptions(NSApplicationActivateIgnoringOtherApps)
-            '''
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.after_idle(self.root.attributes, '-topmost', False)
 
         self.root.mainloop()
 
@@ -87,7 +83,7 @@ class ImageViewer(object):
     def __init__(self, title, img):
         self.title = title
 
-        self.root = get_tk_root()
+        self.root = get_top_level()
 
         self.root.configure(background='black')
         self.root.title(title)
@@ -102,26 +98,14 @@ class ImageViewer(object):
         # so maybe we can avoid importing 'Cocoa'
         # What's your consideration here? @beaugunderson
 
-        if platform.system() != 'Darwin':
-            self.root.lift()
-            self.root.attributes('-topmost', True)
-            self.root.after_idle(self.root.attributes, '-topmost', False)
-        else:
-            self.root.lift()
-            self.root.attributes('-topmost', True)
-            self.root.after_idle(self.root.attributes, '-topmost', False)
-            '''
-            from Cocoa import NSRunningApplication, NSApplicationActivateIgnoringOtherApps
-
-            app = NSRunningApplication.runningApplicationWithProcessIdentifier(os.getpid())
-            app.activateWithOptions(NSApplicationActivateIgnoringOtherApps)
-            '''
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.after_idle(self.root.attributes, '-topmost', False)
 
         self.update(img)
 
     def update(self, img):
-        self.img = (img * 255).astype('uint8')
-        photo = ImageTk.PhotoImage(Image.fromarray(self.img))
+        photo = ImageTk.PhotoImage(Image.fromarray(img.swapaxes(0, 1)[::-1]))
         self.label.configure(image=photo)
         self.label.image = photo
 

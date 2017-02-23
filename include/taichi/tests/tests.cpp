@@ -1,6 +1,6 @@
 #include <taichi/math/array_3d.h>
 #include <taichi/system/timer.h>
-#include <taichi/dynamics/pressure_solver3d.h>
+#include <taichi/dynamics/poisson_solver3d.h>
 
 TC_NAMESPACE_BEGIN
 
@@ -9,7 +9,7 @@ TC_FORCE_INLINE void benchmark(T &t, int n) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             for (int k = 0; k < n; k++) {
-                t[i][j][k] = (i + j + k);
+                t[i][j][k] = real(i + j + k);
             }
         }
     }
@@ -41,7 +41,7 @@ void benchmark_array_3d() {
 
 void test() {
     //benchmark_array_3d();
-    create_instance<PressureSolver3D>("mg")->test();
+    create_instance<PoissonSolver3D>("mg")->test();
 }
 
 TC_NAMESPACE_END
