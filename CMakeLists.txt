@@ -4,8 +4,7 @@ project(taichi)
 include_directories(src)
 
 if (WIN32)
-    set(BOOST_ROOT "C:/boost_1_62_0")
-    link_directories(external/lib)
+    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/external/lib)
 endif ()
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -41,20 +40,12 @@ message("Module path:" ${CMAKE_MODULE_PATH})
 
 set(CMAKE_BUILD_TYPE Release)
 
-include_directories("external/include/glm")
-# find_library(OPENCL_LIBRARIES OpenCL)
-
 find_package(Boost COMPONENTS
         system
         python REQUIRED)
-if (WIN32)
-    include_directories(${BOOST_ROOT})
-else ()
-    include_directories(${BOOST_INCLUDE_DIRS})
-endif ()
+include_directories(${Boost_INCLUDE_DIRS})
 
 # Python and numpy
-
 
 message("Make sure the python executable is the same one used in boost::python.")
 

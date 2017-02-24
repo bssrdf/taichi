@@ -4,7 +4,9 @@
 #include <taichi/visual/renderer.h>
 #include <taichi/visual/volume_material.h>
 #include <taichi/visual/surface_material.h>
+#include <taichi/math/sdf.h>
 #include <taichi/visualization/particle_visualization.h>
+#include <taichi/common/asset_manager.h>
 
 #include <taichi/geometry/factory.h>
 
@@ -27,6 +29,8 @@ EXPLICIT_GET_POINTER(taichi::EnvironmentMap);
 EXPLICIT_GET_POINTER(taichi::Texture);
 
 EXPLICIT_GET_POINTER(taichi::ParticleRenderer);
+
+EXPLICIT_GET_POINTER(taichi::SDF);
 
 TC_NAMESPACE_BEGIN
 
@@ -59,17 +63,16 @@ std::vector<Triangle> merge_mesh(const std::vector<Triangle> &a, const std::vect
 template<typename T, int ret>
 int return_constant(T *) { return ret; }
 
-
-    template<typename T, int channels>
-    void ndarray_to_image_buffer(T *arr, long long input, int width, int height) // 'input' is actually a pointer...
-    {
-        arr->initialize(width, height);
-        for (auto &ind : arr->get_region()) {
-            for (int i = 0; i < channels; i++) {
-                (*arr)[ind][i] = reinterpret_cast<float *>(input)[ind.i * channels + ind.j * width * channels + i];
-            }
+template<typename T, int channels>
+void ndarray_to_image_buffer(T *arr, uint64 input, int width, int height) // 'input' is actually a pointer...
+{
+    arr->initialize(width, height);
+    for (auto &ind : arr->get_region()) {
+        for (int i = 0; i < channels; i++) {
+            (*arr)[ind][i] = reinterpret_cast<real *>(input)[ind.i * channels * height + ind.j * channels + i];
         }
     }
+}
 
 void export_visual() {
     def("function23_from_py_obj", function23_from_py_obj);
@@ -77,6 +80,7 @@ void export_visual() {
     def("generate_mesh", Mesh3D::generate);
     def("merge_mesh", merge_mesh);
     def("rasterize_render_particles", rasterize_render_particles);
+    def("register_sdf", &AssetManager::insert_asset<SDF>);
     def("register_texture", &AssetManager::insert_asset<Texture>);
     def("register_surface_material", &AssetManager::insert_asset<SurfaceMaterial>);
     // TODO: these should registered by iterating over existing interfaces.
@@ -84,28 +88,31 @@ void export_visual() {
     def("create_renderer", create_instance<Renderer>);
     def("create_camera", create_instance<Camera>);
     def("create_particle_renderer", create_instance<ParticleRenderer>);
+    def("create_sdf", create_instance<SDF>);
     def("create_surface_material", create_instance<SurfaceMaterial>);
     def("create_volume_material", create_instance<VolumeMaterial>);
     def("create_environment_map", create_instance<EnvironmentMap>);
     def("create_mesh", std::make_shared<Mesh>);
     def("create_scene", std::make_shared<Scene>);
-    class_<ImageBuffer<Vector3 >>("RGBImageFloat", init<int, int, Vector3>())
-            .def("get_width", &ImageBuffer<Vector3>::get_width)
-            .def("get_height", &ImageBuffer<Vector3>::get_height)
-            .def("get_channels", &return_constant<ImageBuffer<Vector3>, 3>)
-            .def("from_array2d", &ImageBuffer<Vector3>::from_array2d)
-            .def("from_ndarray", &ndarray_to_image_buffer<ImageBuffer<Vector3>, 3>)
-            .def("read", &ImageBuffer<Vector3>::load)
-            .def("write", &ImageBuffer<Vector3>::write)
-            .def("to_ndarray", &image_buffer_to_ndarray<ImageBuffer<Vector3>, 3>);
-    class_<ImageBuffer<Vector4 >>("RGBAImageFloat", init<int, int, Vector4>())
-        .def("get_width", &ImageBuffer<Vector4>::get_width)
-        .def("get_height", &ImageBuffer<Vector4>::get_height)
-        .def("get_channels", &return_constant<ImageBuffer<Vector4>, 4>)
-        .def("write", &ImageBuffer<Vector4>::write)
-        .def("from_array2d", &ImageBuffer<Vector4>::from_array2d)
-        .def("from_ndarray", &ndarray_to_image_buffer<ImageBuffer<Vector4>, 4>)
-        .def("to_ndarray", &image_buffer_to_ndarray<ImageBuffer<Vector4>, 4>);
+    class_<Array2D<Vector3 >>("Array2DVector3", init<int, int, Vector3>())
+        .def("get_width", &Array2D<Vector3>::get_width)
+        .def("get_height", &Array2D<Vector3>::get_height)
+        .def("get_channels", &return_constant<Array2D<Vector3>, 3>)
+        .def("from_ndarray", &ndarray_to_image_buffer<Array2D<Vector3>, 3>)
+        .def("read", &Array2D<Vector3>::load)
+        .def("write", &Array2D<Vector3>::write)
+        .def("write_to_disk", &Array2D<Vector3>::write_to_disk)
+        .def("read_from_disk", &Array2D<Vector3>::read_from_disk)
+        .def("to_ndarray", &image_buffer_to_ndarray<Array2D<Vector3>, 3>);
+    class_<Array2D<Vector4 >>("Array2DVector4", init<int, int, Vector4>())
+        .def("get_width", &Array2D<Vector4>::get_width)
+        .def("get_height", &Array2D<Vector4>::get_height)
+        .def("get_channels", &return_constant<Array2D<Vector4>, 4>)
+        .def("write", &Array2D<Vector4>::write)
+        .def("from_ndarray", &ndarray_to_image_buffer<Array2D<Vector4>, 4>)
+        .def("write_to_disk", &Array2D<Vector4>::write_to_disk)
+        .def("read_from_disk", &Array2D<Vector4>::read_from_disk)
+        .def("to_ndarray", &image_buffer_to_ndarray<Array2D<Vector4>, 4>);
     class_<Texture>("Texture")
         .def("initialize", &Texture::initialize);;
 
@@ -151,6 +158,10 @@ void export_visual() {
         .def("set_camera", &ParticleRenderer::set_camera)
         .def("render", &ParticleRenderer::render);
 
+    class_<SDF>("SDF")
+            .def("initialize", &SDF::initialize)
+            .def("eval", &SDF::eval);
+
     class_<Function22>("Function22");
     class_<Function23>("Function23");
 
@@ -166,6 +177,7 @@ void export_visual() {
     register_ptr_to_python<std::shared_ptr<Scene>>();
     register_ptr_to_python<std::shared_ptr<Texture>>();
     register_ptr_to_python<std::shared_ptr<ParticleRenderer>>();
+    register_ptr_to_python<std::shared_ptr<SDF>>();
 }
 
 TC_NAMESPACE_END
