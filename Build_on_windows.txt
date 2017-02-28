@@ -1,0 +1,1 @@
+>cmake -G "Visual Studio 14 Win64" -DBOOST_ROOT=c:\boost_1_61_0 -DPYTHON_EXECUTABLE=C:\WinPython-64bit-2.7.10.2\python-2.7.10.amd64\python.exe -DPYTHON_INCLUDE_DIRS=C:\WinPython-64bit-2.7.10.2\python-2.7.10.amd64\include -DPYTHON_LIBARARY=C:\WinPython-64bit-2.7.10.2\python-2.7.10.amd64\libs\python27.lib ..
