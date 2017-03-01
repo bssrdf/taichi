@@ -25,7 +25,7 @@ class SimulationWindow(pyglet.window.Window):
             width = max_side
             height = max_side
         super(SimulationWindow, self).__init__(width=width, height=height, fullscreen=False, caption='Taichi',
-                                               config=pyglet.gl.Config(sample_buffers=0, samples=0, depth_size=16,
+                                               config=pyglet.gl.Config(sample_buffers=0, samples=0, depth_size=24,
                                                                        double_buffer=True))
         uuid = get_unique_task_id()
         self.video_filename = uuid + ".mp4"

@@ -94,8 +94,9 @@ class MPMSimulator(Simulator):
         self.add_particles(samples)
 
     def add_particles_texture(self, center, width, filename, particle_type, **kwargs):
-        if filename[0] != '/':
-            filename = TEXTURE_PATH + filename
+        #if filename[0] != '/':
+         #   print filename
+            #filename = TEXTURE_PATH + filename
         im = Image.open(filename)
         positions = []
         height = width / im.width * im.height
