@@ -1,10 +1,9 @@
-from load_core import tc_core
-from unit import unit
+from .util import ti_core, build, format, load_module, start_memory_monitoring, \
+  is_release, package_root
+from .unit import unit
 
-# TODO: 'tc_core' should be changed to 'core'...
+ti_core.build = build
+ti_core.format = format
+ti_core.load_module = load_module
 
-__all__ = [
-    'tc_core',
-    'core',
-    'unit'
-]
+__all__ = [s for s in dir() if not s.startswith('_')] + ['settings']

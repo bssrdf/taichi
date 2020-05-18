@@ -5,36 +5,12 @@
 # version format
 version: 0.0.{build}-{branch}
 
-# branches to build
-branches:
-  # whitelist
-  only:
-    - master
-
 #---------------------------------#
 #    environment configuration    #
 #---------------------------------#
 
-# Build worker image (VM template)
-image: Visual Studio 2015
-
-# environment variables
-environment:
-  BOOST_INCLUDEDIR: C:\Libraries\boost_1_62_0
-  BOOST_LIBRARYDIR: C:\Libraries\boost_1_62_0\lib64-msvc-14.0
-  TAICHI_ROOT_DIR: C:\projects\taichi\
-  
-  matrix:
-    - PYTHON_ROOT_DIR: "C:\\Python27-x64"
-      PYTHON_VERSION: "2.7.x"
-      PYTHON_ARCH: "64"
-
-# clone directory
-clone_folder: $(TAICHI_ROOT_DIR)
-
-install:
-  - cd %TAICHI_ROOT_DIR%
-  - git clone https://github.com/IteratorAdvance/taichi
+image: Visual Studio 2017
+clone_folder: C:\taichi
 
 #---------------------------------#
 #       build configuration       #
@@ -43,25 +19,47 @@ install:
 platform: x64
 configuration: Release
 
+environment:
+  matrix:
+    - PYTHON: C:\Python36-x64\python.exe
+    - PYTHON: C:\Python37-x64\python.exe
+    - PYTHON: C:\Python38-x64\python.exe
+
+skip_commits:
+  files:
+    - '*.md'
+    - '*.rst'
+    - docs
+    - benchmarks
+    - examples
+    - misc
+    - '.*'
+
+cache:
+  - build -> CMakeLists.txt, cmake/*
+
 build_script:
-  - set PATH=%PYTHON_ROOT_DIR%;%PYTHON_ROOT_DIR%\Scripts;%PATH%
-  - set PYTHONPATH=%TAICHI_ROOT_DIR%/taichi/python/;%PYTHONPATH%
-  - python --version
-  - python -c "import struct; print(struct.calcsize('P') * 8)"
-  - python -m pip install numpy future futures watchdog Pillow
-  - echo %PYTHONPATH%
-  - cd %TAICHI_ROOT_DIR%\taichi
-  - md build
+  - set TAICHI_REPO_DIR=C:\taichi
+  - "%PYTHON% %TAICHI_REPO_DIR%/misc/appveyor_filter.py || appveyor exit 0"
+  - cd C:\
+  - curl --retry 10 --retry-delay 5 https://github.com/yuanming-hu/taichi_assets/releases/download/llvm8/taichi-llvm-8.0.1-msvc2017.zip -LO
+  - 7z x taichi-llvm-8.0.1-msvc2017.zip -otaichi_llvm
+  - curl --retry 10 --retry-delay 5 https://github.com/yuanming-hu/taichi_assets/releases/download/llvm8/clang-7.0.1-win.zip -LO
+  - "echo \"%APPVEYOR_REPO_COMMIT_MESSAGE%\" | grep '^\\[format\\]' && curl http://kun.csail.mit.edu:31415/%APPVEYOR_PULL_REQUEST_NUMBER% -LO || true"
+  - 7z x clang-7.0.1-win.zip -otaichi_clang
+  - set PATH=C:\taichi_llvm\bin;%PATH%;
+  - set PATH=C:\taichi_clang\bin;%PATH%
+  - set PYTHONPATH=%TAICHI_REPO_DIR%/python
+  - set PATH=%TAICHI_REPO_DIR%\bin;%PATH%
+  - clang --version
+  - cd C:\taichi
+  - "%PYTHON% misc/ci_setup.py ci"
+  - mkdir build
   - cd build
-  - cmake -G "Visual Studio 14 Win64" ..
-  - msbuild /p:Configuration=Release /p:Platform=x64 /m taichi.sln
-  - python -c "import taichi as tc"
-  - 7z a %TAICHI_ROOT_DIR%\taichi\taichi_bin.zip %TAICHI_ROOT_DIR%/taichi/runtimes/*.dll %TAICHI_ROOT_DIR%/taichi/runtimes/Release/taichi_core.dll
-
-#---------------------------------#
-#      artifacts configuration    #
-#---------------------------------#
-
-artifacts:
-  - path: taichi\taichi_bin.zip
-    name: 'taichi-bin-win-x86_64'
+  - cmake .. -G"Visual Studio 15 2017 Win64" -DPYTHON_EXECUTABLE="%PYTHON%" -DLLVM_DIR="C:\taichi_llvm\lib\cmake\llvm"
+  - msbuild /p:Configuration=RelWithDebInfo /p:Platform=x64 /m taichi.sln
+  - cd ..
+  - '%PYTHON% -c "import taichi"'
+  - "%PYTHON% examples/laplace.py"
+  - "%PYTHON% bin/taichi test -vr2 -t2"
+  - "cd python && %PYTHON% build.py try_upload"
